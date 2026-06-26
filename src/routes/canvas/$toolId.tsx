@@ -5,6 +5,7 @@ import {
   FileSpreadsheet, Download,
 } from "lucide-react";
 import { getToolById, type InputParameter } from "~/config/tools";
+import { executeTool, type ExecuteToolResult } from "~/server/tools";
 
 export const Route = createFileRoute("/canvas/$toolId")({
   component: ToolCanvasPage,
@@ -25,24 +26,6 @@ const PROGRESS_STEPS = [
   "Step 4: Formatting final structured spreadsheet...",
 ];
 
-const MOCK_RESULTS = [
-  { name: "John Doe", role: "CEO", email: "john.doe@example.com", phone: "+1 (555) 123-4567" },
-  { name: "Sarah Chen", role: "CTO", email: "sarah.chen@example.com", phone: "+1 (555) 234-5678" },
-  { name: "Michael Smith", role: "VP of Sales", email: "m.smith@example.com", phone: "+1 (555) 345-6789" },
-];
-
-function simulateGenericExecution(toolId: string): Record<string, string> {
-  const tool = getToolById(toolId);
-  if (!tool) return { error: "Tool not found" };
-  const result: Record<string, string> = {};
-  tool.outputSchema.forEach(f => {
-    if (f.key === "seo_score") result[f.key] = String(60 + Math.floor(Math.random() * 40));
-    else if (f.key === "recommendations") result[f.key] = "1. Optimize meta tags\n2. Add alt text\n3. Improve page speed";
-    else result[f.key] = f.label + ": complete";
-  });
-  return result;
-}
-
 function ToolCanvasPage() {
   const { toolId } = useParams({ from: Route.id });
   const tool = getToolById(toolId);
@@ -52,7 +35,7 @@ function ToolCanvasPage() {
   const [targetUrl, setTargetUrl] = useState("");
   const [deepScan, setDeepScan] = useState(false);
   const [progressStep, setProgressStep] = useState(0);
-  const [phase, setPhase] = useState<"idle" | "running" | "done">("idle");
+  const [phase, setPhase] = useState<"idle" | "running" | "done" | "error">("idle");
   const [showResults, setShowResults] = useState(false);
 
   // Generic state
@@ -71,45 +54,97 @@ function ToolCanvasPage() {
     );
   }
 
-  // --- Lead Finder Handler ---
+  // --- Lead Finder Handler (server-backed) ---
   const handleLeadFinderRun = () => {
     if (!targetUrl.trim()) return;
+
     setPhase("running");
     setShowResults(false);
     setProgressStep(0);
 
+    // Run progress animation
     const interval = setInterval(() => {
       setProgressStep((prev) => {
         if (prev >= 3) {
           clearInterval(interval);
-          setPhase("done");
-          setTimeout(() => setShowResults(true), 500);
           return prev;
         }
         return prev + 1;
       });
     }, 1500);
+
+    // Simulate server call (the 1500ms*4 steps = 6s matches the animation)
+    // In production, this would be a real API call
+    setTimeout(async () => {
+      try {
+        // Capture the user's inputs for the server call
+        const serverParams: Record<string, string> = {
+          query: targetUrl,
+          location: "",
+          limit: deepScan ? "10" : "5",
+        };
+        const serverResult: ExecuteToolResult = await executeTool({
+          data: { toolId, params: serverParams },
+        });
+
+        if (serverResult.success) {
+          // Store server data as results for the display
+          setResults({
+            leads: JSON.stringify(serverResult.data.leads ?? []),
+            ...serverResult.data,
+          } as Record<string, string>);
+          setPhase("done");
+          setTimeout(() => setShowResults(true), 300);
+        } else {
+          setResults({ error: serverResult.error ?? "Server execution failed" });
+          setPhase("error");
+          setTimeout(() => setShowResults(true), 300);
+        }
+      } catch {
+        setResults({ error: "Network error contacting execution server" });
+        setPhase("error");
+        setTimeout(() => setShowResults(true), 300);
+      }
+    }, 6000); // after animation completes
   };
 
-  // --- Generic Handler ---
-  const handleGenericRun = () => {
+  // --- Generic Handler (server-backed) ---
+  const handleGenericRun = async () => {
     const missing = tool.inputParameters.filter(p => p.required && !inputs[p.key]?.trim());
     if (missing.length > 0) {
       setStatus("error");
       setResults({ error: "Required: " + missing.map(p => p.label).join(", ") });
       return;
     }
+
     setStatus("running");
     setResults(null);
-    setTimeout(() => {
-      try {
-        setResults(simulateGenericExecution(toolId));
+
+    try {
+      const serverResult: ExecuteToolResult = await executeTool({
+        data: { toolId, params: inputs },
+      });
+
+      if (serverResult.success) {
+        // Flatten the response into the key-value format the generic UI expects
+        const flatResults: Record<string, string> = {};
+        for (const [key, value] of Object.entries(serverResult.data)) {
+          if (typeof value === "object" && value !== null) {
+            flatResults[key] = JSON.stringify(value, null, 2);
+          } else {
+            flatResults[key] = String(value);
+          }
+        }
+        setResults(flatResults);
         setStatus("done");
-      } catch {
+      } else {
+        setResults({ error: serverResult.error ?? "Unknown server error" });
         setStatus("error");
-        setResults({ error: "Execution failed" });
       }
-    }, 2000);
+    } catch {
+      setResults({ error: "Network error contacting execution server" });
+      setStatus("error");
+    }
   };
 
   // --- Generic Input Renderer ---
@@ -121,7 +156,7 @@ function ToolCanvasPage() {
     if (p.type === "password") return (
       <div className="relative">
         <input id={p.key} type={showPassword[p.key] ? "text" : "password"} value={v} onChange={e => setInputs(s => ({ ...s, [p.key]: e.target.value }))} placeholder={p.description} className={c + " pr-10"} />
-        <button onClick={() => setShowPassword(s => ({ ...s, [p.key]: !s[p.key] }))} className="absolute top-1/2 right-3 -translate-y-1/2 text-gray-400">{showPassword[p.key] ? <Loader2 className="h-4 w-4" /> : <Loader2 className="h-4 w-4" />}</button>
+        <button onClick={() => setShowPassword(s => ({ ...s, [p.key]: !s[p.key] }))} className="absolute top-1/2 right-3 -translate-y-1/2 text-gray-400"><AlertCircle className="h-4 w-4" /></button>
       </div>
     );
     return <input id={p.key} type={p.type === "number" ? "number" : "text"} value={v} onChange={e => setInputs(s => ({ ...s, [p.key]: e.target.value }))} placeholder={p.description} className={c} />;
@@ -129,6 +164,14 @@ function ToolCanvasPage() {
 
   // ===== LEAD FINDER SPEC =====
   if (isLeadFinder) {
+    // Parse leads from server results when available
+    let leads: Record<string, unknown>[] = [];
+    if (results?.leads) {
+      try { leads = JSON.parse(results.leads); }
+      catch { /* ignore parse errors */ }
+    }
+    const errorMsg = phase === "error" ? results?.error : null;
+
     return (
       <div>
         <Link to="/" className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-700">
@@ -210,13 +253,19 @@ function ToolCanvasPage() {
                   <p className="mt-4 text-sm font-medium text-gray-900">No Data Yet</p>
                   <p className="mt-1 text-sm text-gray-500">Run the tool to generate business value data.</p>
                 </div>
-              ) : (
+              ) : errorMsg ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <AlertCircle className="h-12 w-12 text-red-300" />
+                  <p className="mt-4 text-sm font-medium text-red-700">Execution Error</p>
+                  <p className="mt-1 text-sm text-gray-500">{errorMsg}</p>
+                </div>
+              ) : leads.length > 0 ? (
                 <div>
                   <div className="mb-4 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <CheckCircle2 className="h-5 w-5 text-emerald-500" />
                       <span className="text-sm font-medium text-emerald-700">Lead extraction complete</span>
-                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">{MOCK_RESULTS.length} contacts</span>
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">{leads.length} contacts</span>
                     </div>
                     <button className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white transition-all hover:bg-emerald-700">
                       <Download className="h-3.5 w-3.5" /> Export to Excel (.xlsx)
@@ -227,24 +276,39 @@ function ToolCanvasPage() {
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Contact Name</th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Assigned Role</th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Verified Email</th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Phone Number</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Business Name</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Phone</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Address</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Rating</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {MOCK_RESULTS.map((row, i) => (
+                        {leads.map((row, i) => (
                           <tr key={i} className="hover:bg-gray-50">
-                            <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">{row.name}</td>
-                            <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">{row.role}</td>
-                            <td className="whitespace-nowrap px-4 py-3 text-sm text-indigo-600">{row.email}</td>
-                            <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">{row.phone}</td>
+                            <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-900">
+                              {String(row.business_name ?? "")}
+                              {row.website && <span className="ml-2 text-xs text-indigo-500">🔗</span>}
+                            </td>
+                            <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">{String(row.phone ?? "")}</td>
+                            <td className="max-w-[200px] truncate px-4 py-3 text-sm text-gray-600">{String(row.address ?? "")}</td>
+                            <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
+                              <span className="inline-flex items-center gap-1">
+                                <span className="text-amber-500">★</span>
+                                {String(row.rating ?? "—")}
+                                <span className="ml-1 text-xs text-gray-400">({String(row.reviews ?? "0")})</span>
+                              </span>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <AlertCircle className="h-12 w-12 text-gray-300" />
+                  <p className="mt-4 text-sm font-medium text-gray-900">No leads found</p>
+                  <p className="mt-1 text-sm text-gray-500">Try a different URL or enable deep scanning.</p>
                 </div>
               )}
             </div>
@@ -287,7 +351,7 @@ function ToolCanvasPage() {
             {status === "running" && (
               <div className="py-16 text-center">
                 <Loader2 className="mx-auto h-10 w-10 animate-spin text-indigo-500" />
-                <p className="mt-4 text-sm font-medium">Running...</p>
+                <p className="mt-4 text-sm font-medium">Processing on server...</p>
               </div>
             )}
             {status === "error" && results?.error && <div className="mt-4 rounded-lg bg-red-50 p-4 text-sm text-red-600">{results.error}</div>}
@@ -303,7 +367,11 @@ function ToolCanvasPage() {
                       {tool.outputSchema.map(f => (
                         <tr key={f.key} className="hover:bg-gray-50">
                           <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-gray-700">{f.label}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{results[f.key] ?? "-"}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">
+                            {results[f.key] !== undefined ? (
+                              <span className="whitespace-pre-wrap">{results[f.key].length > 200 ? results[f.key].slice(0, 200) + "..." : results[f.key]}</span>
+                            ) : "—"}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
