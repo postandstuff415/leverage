@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { getToolById, type InputParameter } from "~/config/tools";
 
-export const Route = createFileRoute("/canvas-tool-v2")({
+export const Route = createFileRoute("/canvas/$toolId")({
   component: ToolCanvasPage,
   notFoundComponent: () => (
     <div className="flex flex-col items-center justify-center py-20 text-center">
