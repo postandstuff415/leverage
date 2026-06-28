@@ -24,6 +24,164 @@ export interface ExecuteToolResult {
   error?: string;
 }
 
+// ── SerpApi Integration ───────────────────────────────────────────
+
+const SERPAPI_BASE = "https://serpapi.com/search.json";
+
+/**
+ * Maps the SerpApi Google Maps local result to our output schema.
+ */
+interface SerpApiPlaceResult {
+  title?: string;
+  address?: string;
+  phone?: string;
+  website?: string;
+  rating?: number;
+  reviews?: number;
+  gps_coordinates?: { latitude: number; longitude: number };
+  place_id?: string;
+  type?: string;
+  types?: string[];
+  thumbnail?: string;
+  operating_hours?: Record<string, string>;
+}
+
+interface SerpApiResponse {
+  local_results?: SerpApiPlaceResult[];
+  error?: string;
+  search_metadata?: { id: string; status: string };
+}
+
+async function callSerpApiLocalLeads(
+  query: string,
+  location: string,
+  limit: number,
+): Promise<{
+  leads: Record<string, unknown>[];
+  error?: string;
+}> {
+  const apiKey = process.env.SERPAPI_KEY;
+
+  if (!apiKey) {
+    // No API key configured — fall back to mock data with a warning
+    console.warn(
+      "[Leverage] SERPAPI_KEY not set. Falling back to mock data for Local Leads Finder.",
+    );
+    return { leads: mockLeadsFallback(query, location, limit) };
+  }
+
+  // Build the search term: combine query and location
+  const searchQuery = location ? `${query} in ${location}` : query;
+
+  const url = new URL(SERPAPI_BASE);
+  url.searchParams.set("engine", "google_maps");
+  url.searchParams.set("q", searchQuery);
+  url.searchParams.set("type", "search");
+  url.searchParams.set("api_key", apiKey);
+  url.searchParams.set("num", String(Math.min(limit, 20))); // serpapi supports up to 20
+
+  let response: Response;
+  try {
+    response = await fetch(url.toString(), {
+      signal: AbortSignal.timeout(15_000), // 15-second timeout
+    });
+  } catch (fetchErr) {
+    return {
+      leads: [],
+      error: `Network error contacting SerpApi: ${fetchErr instanceof Error ? fetchErr.message : "Unknown error"}`,
+    };
+  }
+
+  if (!response.ok) {
+    return {
+      leads: [],
+      error: `SerpApi returned HTTP ${response.status}: ${response.statusText}`,
+    };
+  }
+
+  let json: SerpApiResponse;
+  try {
+    json = (await response.json()) as SerpApiResponse;
+  } catch {
+    return {
+      leads: [],
+      error: "Failed to parse SerpApi response as JSON",
+    };
+  }
+
+  // Check for API-level errors
+  if (json.error) {
+    // Rate limit, invalid key, etc.
+    if (
+      json.error.includes("API key") ||
+      json.error.includes("account")
+    ) {
+      return {
+        leads: [],
+        error: `SerpApi authentication error: ${json.error}. Please check your SERPAPI_KEY.`,
+      };
+    }
+    return {
+      leads: [],
+      error: `SerpApi error: ${json.error}`,
+    };
+  }
+
+  // Map results to our output schema
+  const places = json.local_results ?? [];
+  const leads: Record<string, unknown>[] = places.map(
+    (place: SerpApiPlaceResult) => ({
+      business_name: place.title ?? "Unknown Business",
+      phone: place.phone ?? "",
+      address: place.address ?? "",
+      website: place.website ?? "",
+      rating: place.rating ?? null,
+      reviews: place.reviews ?? 0,
+      place_id: place.place_id ?? null,
+      categories: Array.isArray(place.types) ? place.types : [],
+    }),
+  );
+
+  return { leads };
+}
+
+/**
+ * Fallback mock data used when SerpApi key is not configured.
+ */
+function mockLeadsFallback(
+  query: string,
+  location: string,
+  count: number,
+): Record<string, unknown>[] {
+  const companies = [
+    "Acme Corp",
+    "Globex Inc",
+    "Initech",
+    "Cyberdyne Systems",
+    "Wayne Enterprises",
+    "Stark Industries",
+    "Umbrella Corp",
+    "Massive Dynamic",
+    "Hooli",
+    "Pied Piper",
+  ];
+  const streets = ["Oak", "Maple", "Pine", "Cedar", "Elm"];
+
+  const leads: Record<string, unknown>[] = [];
+  const actualCount = Math.min(count, 10);
+  for (let i = 0; i < actualCount; i++) {
+    leads.push({
+      business_name: `${companies[i % companies.length]} ${query.charAt(0).toUpperCase() + query.slice(1)}`,
+      phone: `+1 (${200 + i * 33}) ${100 + i * 77}-${1000 + i * 1111}`,
+      address: `${100 + i * 123} ${streets[i % streets.length]} St, ${location || "US"}`,
+      website: `https://www.${query.replace(/\s+/g, "")}${i}.com`,
+      rating: parseFloat((3.5 + (i % 5) * 0.3).toFixed(1)),
+      reviews: 10 + i * 50,
+    });
+  }
+  return leads;
+}
+
 // ── Mock data helpers ─────────────────────────────────────────────
 
 function randomInt(min: number, max: number): number {
@@ -35,35 +193,6 @@ function randomChoice<T>(arr: T[]): T {
 }
 
 // ── Tool-specific mock data generators ────────────────────────────
-
-const COMPANIES = [
-  "Acme Corp", "Globex Inc", "Initech", "Cyberdyne Systems",
-  "Wayne Enterprises", "Stark Industries", "Umbrella Corp",
-  "Massive Dynamic", "Hooli", "Pied Piper",
-];
-
-const LOCATIONS = [
-  "San Francisco, CA", "Austin, TX", "New York, NY", "Chicago, IL",
-  "Seattle, WA", "Denver, CO", "Miami, FL", "Portland, OR",
-];
-
-function mockLocalLeads(params: Record<string, string>) {
-  const count = params.limit ? Math.min(Number(params.limit), 10) : 5;
-  const query = params.query || "business";
-  const location = params.location || "US";
-  const leads: Record<string, unknown>[] = [];
-  for (let i = 0; i < count; i++) {
-    leads.push({
-      business_name: `${randomChoice(COMPANIES)} ${query.charAt(0).toUpperCase() + query.slice(1)}`,
-      phone: `+1 (${randomInt(200, 999)}) ${randomInt(100, 999)}-${randomInt(1000, 9999)}`,
-      address: `${randomInt(100, 9999)} ${randomChoice(["Oak", "Maple", "Pine", "Cedar", "Elm"])} St, ${location}`,
-      website: `https://www.${query.replace(/\s+/g, "")}${i}.com`,
-      rating: parseFloat((3.5 + Math.random() * 1.5).toFixed(1)),
-      reviews: randomInt(10, 500),
-    });
-  }
-  return { leads };
-}
 
 function mockAiAgentBuilder(params: Record<string, string>) {
   const bizName = params.business_name || "My Business";
@@ -174,16 +303,32 @@ export const executeTool = createServerFn({ method: "POST" })
       } satisfies ExecuteToolResult;
     }
 
-    // Simulate processing delay (real backends will replace this)
-    await new Promise((resolve) => setTimeout(resolve, 800));
+    // Simulate processing delay for mock-based tools
+    // (local-leads-finder has its own latency from the API call)
+    if (toolId !== "local-leads-finder") {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    }
 
     try {
       let data: Record<string, unknown>;
 
       switch (toolId) {
-        case "local-leads-finder":
-          data = mockLocalLeads(params);
+        case "local-leads-finder": {
+          // Real SerpApi integration (falls back to mock if no API key)
+          const query = params.query || "";
+          const location = params.location || "";
+          const limit = params.limit ? Number(params.limit) : 5;
+          const result = await callSerpApiLocalLeads(query, location, limit);
+          if (result.error) {
+            return {
+              success: false,
+              data: {},
+              error: result.error,
+            } satisfies ExecuteToolResult;
+          }
+          data = { leads: result.leads };
           break;
+        }
         case "custom-ai-agent-builder":
           data = mockAiAgentBuilder(params);
           break;
