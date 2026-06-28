@@ -346,16 +346,17 @@ export const tools: ToolConfig[] = [
     },
     inputParameters: [
       {
-        key: "article_text",
-        type: "textarea",
-        label: "News Article Text",
-        description: "Paste the article or news text to analyze",
+        key: "topic",
+        type: "string",
+        label: "Market Topic or Ticker",
+        description: "e.g., AAPL, Technology, or Energy",
+        placeholder: "Technology",
         required: true,
       },
     ],
     outputSchema: [
+      { key: "market_mood", type: "string", label: "Market Mood" },
       { key: "sentiment_score", type: "number", label: "Sentiment Score" },
-      { key: "sentiment_label", type: "string", label: "Sentiment Label (Positive/Neutral/Negative)" },
     ],
   },
   {

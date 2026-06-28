@@ -21,6 +21,7 @@ import {
   Settings,
   ChevronRight,
   Zap,
+  BarChart3,
 } from "lucide-react";
 
 export const Route = createRootRoute({
@@ -63,6 +64,7 @@ export const Route = createRootRoute({
 const navItems = [
   { label: "Storefront", path: "/", icon: Store },
   { label: "Canvas", path: "/canvas", icon: LayoutDashboard },
+  { label: "Dashboard", path: "/dashboard", icon: BarChart3 },
   { label: "Developer Portal", path: "/developers", icon: Code2 },
 ];
 

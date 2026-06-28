@@ -4,11 +4,12 @@ import {
   ArrowLeft, Play, Loader2, CheckCircle2, AlertCircle,
   FileSpreadsheet, Download, Upload, Database, Table,
   Zap, Target, TrendingUp, AlertTriangle, CheckCircle, Info,
-  ClipboardCopy,
+  ClipboardCopy, Search, BookOpen, FileText, Layers, Lock,
 } from "lucide-react";
 import { getToolById, type InputParameter } from "~/config/tools";
 import { executeTool, type ExecuteToolResult } from "~/server/tools";
 import { generateSql, extractCsvSchema } from "~/server/ask-your-data";
+import { checkMembership, type MembershipStatus } from "~/server/membership";
 
 export const Route = createFileRoute("/canvas/$toolId")({
   component: ToolCanvasPage,
@@ -31,11 +32,14 @@ const PROGRESS_STEPS = [
 
 function ToolCanvasPage() {
   const { toolId } = useParams({ from: Route.id });
+  console.log("DEBUG toolId:", toolId);
   const tool = getToolById(toolId);
   const isLeadFinder = toolId === "local-leads-finder";
   const isAskYourData = toolId === "ask-your-data";
   const isBusinessAudit = toolId === "smart-business-audit";
   const isRepurposer = toolId === "content-repurposer";
+  const isMarketSentiment = toolId === "market-sentiment-watcher";
+  const isDeepResearcher = toolId === "ai-deep-researcher"; 
 
   // Lead Finder state
   const [targetUrl, setTargetUrl] = useState("");
@@ -64,11 +68,22 @@ function ToolCanvasPage() {
   const [auditResults, setAuditResults] = useState<any>(null);
   const [auditError, setAuditError] = useState("");
 
+  // AI Deep Researcher state
+  const [researchTopic, setResearchTopic] = useState("");
+  const [researchDepth, setResearchDepth] = useState("Standard");
+  const [researchFormat, setResearchFormat] = useState("Executive Summary");
+  const [researchStatus, setResearchStatus] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [researchResults, setResearchResults] = useState<any>(null);
+  const [researchError, setResearchError] = useState("");
+
   // Generic state
   const [inputs, setInputs] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<"idle" | "running" | "done" | "error">("idle");
   const [results, setResults] = useState<Record<string, any> | null>(null);
-  const [showPassword, setShowPassword] = useState<Record<string, boolean>>({});
+  const [showPassword, setShowPassword] = useState<Record<string, boolean>>({});  // Membership gate state
+  const [membership, setMembership] = useState<MembershipStatus | null>(null);
+  const [membershipLoading, setMembershipLoading] = useState(true);
+
 
   // Initialize DuckDB-Wasm for Ask Your Data
   useEffect(() => {
@@ -109,7 +124,20 @@ function ToolCanvasPage() {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => { cancelled = true; };  // Check membership status on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const status = await checkMembership();
+        setMembership(status);
+      } catch {
+        setMembership({ isLoggedIn: false, isSubscribed: false, userDisplayName: null });
+      } finally {
+        setMembershipLoading(false);
+      }
+    })();
+  }, []);
+
   }, [isAskYourData]);
 
   if (!tool) {
@@ -269,6 +297,34 @@ function ToolCanvasPage() {
     }
   };
 
+  const handleResearchRun = async () => {
+    if (!researchTopic.trim()) return;
+    setResearchStatus("running");
+    setResearchError("");
+    try {
+      const result = await executeTool({
+        data: {
+          toolId: "ai-deep-researcher",
+          params: {
+            topic: researchTopic,
+            depth_level: researchDepth,
+            output_format: researchFormat,
+          },
+        },
+      });
+      if (result.success) {
+        setResearchResults(result.data);
+        setResearchStatus("done");
+      } else {
+        setResearchError(result.error || "Execution failed");
+        setResearchStatus("error");
+      }
+    } catch (err) {
+      setResearchError("An unexpected error occurred");
+      setResearchStatus("error");
+    }
+  };
+
   const handleGenericRun = async () => {
     const missing = tool.inputParameters.filter(p => p.required && !inputs[p.key]?.trim());
     if (missing.length > 0) {
@@ -398,6 +454,84 @@ function ToolCanvasPage() {
     );
   }
 
+    // ===== MARKET SENTIMENT SPEC =====
+  if (isMarketSentiment) {
+    return (
+      <div>
+        <Link to="/" className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-700">
+          <ArrowLeft className="h-4 w-4" /> Back to Storefront
+        </Link>
+        <div className="grid gap-6 lg:grid-cols-5">
+          <div className="lg:col-span-2">
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <h2 className="text-lg font-semibold text-gray-900">{tool.metadata.name}</h2>
+              <p className="mb-5 text-sm text-gray-500">{tool.metadata.description}</p>
+              <div className="space-y-4">
+                {tool.inputParameters.map(p => (
+                  <div key={p.key}>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">{p.label}{p.required && <span className="ml-1 text-red-400">*</span>}</label>
+                    {renderInput(p)}
+                  </div>
+                ))}
+              </div>
+              <button onClick={handleGenericRun} disabled={status === "running"} className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">
+                {status === "running" ? <><Loader2 className="h-4 w-4 animate-spin" /> Analyzing...</> : <><Zap className="h-4 w-4" /> Watch Market</>}
+              </button>
+            </div>
+          </div>
+          <div className="lg:col-span-3">
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <h3 className="text-sm font-semibold text-gray-900">Sentiment Analysis</h3>
+              {status === "idle" && <div className="py-16 text-center text-sm text-gray-500">Enter a topic and click "Watch Market".</div>}
+              {status === "running" && (
+                <div className="py-16 text-center">
+                  <Loader2 className="mx-auto h-10 w-10 animate-spin text-indigo-500" />
+                  <p className="mt-4 text-sm font-medium">Scanning news and calculating sentiment...</p>
+                </div>
+              )}
+              {status === "error" && results?.error && <div className="mt-4 rounded-lg bg-red-50 p-4 text-sm text-red-600">{results.error}</div>}
+              {status === "done" && results && (
+                <div className="mt-6 space-y-6">
+                  <div className="flex items-center justify-between rounded-lg bg-gray-50 p-6 border border-gray-100">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Market Mood</p>
+                      <p className={`text-2xl font-black ${results.market_mood?.includes("Bullish") ? "text-emerald-600" : results.market_mood?.includes("Bearish") ? "text-rose-600" : "text-amber-600"}`}>
+                        {results.market_mood}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-bold uppercase tracking-wider text-gray-500">Sentiment Score</p>
+                      <p className="text-2xl font-mono font-bold text-gray-900">{results.sentiment_score > 0 ? "+" : ""}{results.sentiment_score}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="mb-3 text-sm font-bold text-gray-900">Top Relevant News</h4>
+                    <div className="space-y-4">
+                      {results.top_articles?.map((article: any, i: number) => (
+                        <div key={i} className="group rounded-lg border border-gray-100 p-4 hover:bg-gray-50 transition-colors">
+                          <div className="flex items-start justify-between gap-4">
+                            <h5 className="text-sm font-bold text-gray-900 group-hover:text-indigo-600">
+                              {article.url !== "#" ? <a href={article.url} target="_blank" rel="noopener noreferrer" className="hover:underline">{article.title}</a> : article.title}
+                            </h5>
+                            <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${article.sentiment_label?.includes("Bullish") ? "bg-emerald-100 text-emerald-700" : article.sentiment_label?.includes("Bearish") ? "bg-rose-100 text-rose-700" : "bg-gray-100 text-gray-600"}`}>
+                              {article.sentiment_label}
+                            </span>
+                          </div>
+                          <p className="mt-2 text-xs text-gray-500 line-clamp-2">{article.summary}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ===== BUSINESS AUDIT SPEC =====
   if (isBusinessAudit) {
     return (
@@ -431,6 +565,141 @@ function ToolCanvasPage() {
                   <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-4"><div className="mb-3 flex items-center gap-2 font-semibold text-gray-900"><TrendingUp className="h-4 w-4 text-indigo-500" /><h4>SWOT Analysis</h4></div><div className="whitespace-pre-wrap text-sm" dangerouslySetInnerHTML={{ __html: auditResults.swot_analysis.replace(/\n/g, '<br />') }} /></div>
                   <div className="rounded-lg border border-gray-100 bg-gray-50/50 p-4"><div className="mb-3 flex items-center gap-2 font-semibold text-gray-900"><Target className="h-4 w-4 text-indigo-500" /><h4>Target Audience Identification</h4></div><div className="whitespace-pre-wrap text-sm" dangerouslySetInnerHTML={{ __html: auditResults.target_audience.replace(/\n/g, '<br />') }} /></div>
                   <div><div className="mb-4 flex items-center gap-2 font-semibold text-gray-900"><Zap className="h-4 w-4 text-indigo-500" /><h4>Growth Experiments</h4></div><div className="grid gap-3">{auditResults.growth_experiments.map((exp: string, i: number) => (<div key={i} className="flex gap-3 rounded-lg border border-gray-100 p-3 transition-colors hover:bg-gray-50"><div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-600">{i + 1}</div><p className="text-sm text-gray-600">{exp}</p></div>))}</div></div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== AI DEEP RESEARCHER SPEC =====
+  if (isDeepResearcher) {
+    return (
+      <div>
+        <Link to="/" className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-700">
+          <ArrowLeft className="h-4 w-4" /> Back to Storefront
+        </Link>
+        <div className="grid gap-6 lg:grid-cols-5">
+          <div className="lg:col-span-2">
+            <div className="rounded-xl border border-gray-200 bg-white p-5">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600"><Search className="h-5 w-5" /></div>
+                <div><h2 className="text-lg font-semibold text-gray-900">{tool.metadata.name}</h2><p className="text-xs text-gray-500">{tool.metadata.category}</p></div>
+              </div>
+              <p className="mb-6 text-sm text-gray-500">{tool.metadata.description}</p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Research Topic <span className="text-red-400">*</span></label>
+                  <input 
+                    type="text" 
+                    value={researchTopic} 
+                    onChange={(e) => setResearchTopic(e.target.value)} 
+                    placeholder="e.g. Future of EV Infrastructure in Europe" 
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100" 
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Depth</label>
+                    <select 
+                      value={researchDepth} 
+                      onChange={(e) => setResearchDepth(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    >
+                      <option value="Standard">Standard</option>
+                      <option value="Exhaustive">Exhaustive</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Format</label>
+                    <select 
+                      value={researchFormat} 
+                      onChange={(e) => setResearchFormat(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    >
+                      <option value="Executive Summary">Summary</option>
+                      <option value="Detailed Whitepaper">Whitepaper</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <button 
+                onClick={handleResearchRun} 
+                disabled={researchStatus === "running" || !researchTopic.trim()} 
+                className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {researchStatus === "running" ? <><Loader2 className="h-4 w-4 animate-spin" /> Researching...</> : <><Search className="h-4 w-4" /> Start Research</>}
+              </button>
+              
+              {researchStatus === "error" && (
+                <div className="mt-4 flex items-start gap-2 rounded-lg bg-red-50 p-3 text-xs text-red-600">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <p>{researchError}</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="lg:col-span-3">
+            <div className="h-full min-h-[500px] rounded-xl border border-gray-200 bg-white p-5">
+              <h3 className="text-sm font-semibold text-gray-900">Research Report</h3>
+              
+              {researchStatus === "idle" && (
+                <div className="flex h-[400px] flex-col items-center justify-center text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-50">
+                    <BookOpen className="h-6 w-6 text-gray-300" />
+                  </div>
+                  <p className="mt-4 text-sm text-gray-500">Enter a topic and start research to generate a report.</p>
+                </div>
+              )}
+
+              {researchStatus === "running" && (
+                <div className="flex h-[400px] flex-col items-center justify-center text-center">
+                  <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
+                  <p className="mt-4 text-sm font-medium text-gray-900">Deep Research in progress...</p>
+                  <p className="mt-1 text-xs text-gray-500">Scanning global sources and synthesizing findings.</p>
+                </div>
+              )}
+
+              {researchStatus === "done" && researchResults && (
+                <div className="mt-6 space-y-8 animate-in fade-in slide-in-from-bottom-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+                      <CheckCircle className="h-4 w-4" /> Report Ready
+                    </div>
+                    <button className="flex items-center gap-1.5 text-xs font-medium text-gray-500 hover:text-indigo-600">
+                      <ClipboardCopy className="h-3.5 w-3.5" /> Copy Report
+                    </button>
+                  </div>
+
+                  <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-5">
+                    <div className="mb-4 flex items-center gap-2 font-semibold text-gray-900">
+                      <FileText className="h-4 w-4 text-indigo-500" />
+                      <h4>Executive Summary</h4>
+                    </div>
+                    <div className="prose prose-sm max-w-none text-gray-600" dangerouslySetInnerHTML={{ __html: researchResults.executive_summary.replace(/\n/g, '<br />') }} />
+                  </div>
+
+                  <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+                    <div className="mb-4 flex items-center gap-2 font-semibold text-gray-900">
+                      <Layers className="h-4 w-4 text-indigo-500" />
+                      <h4>Detailed Findings</h4>
+                    </div>
+                    <div className="prose prose-sm max-w-none text-gray-600" dangerouslySetInnerHTML={{ __html: researchResults.detailed_findings.replace(/\n/g, '<br />') }} />
+                  </div>
+
+                  <div className="rounded-xl border border-gray-200 bg-gray-900 p-5 text-gray-100">
+                    <div className="mb-4 flex items-center gap-2 font-semibold">
+                      <BookOpen className="h-4 w-4 text-indigo-400" />
+                      <h4>Bibliography & Sources</h4>
+                    </div>
+                    <div className="text-xs leading-relaxed text-gray-400" dangerouslySetInnerHTML={{ __html: researchResults.bibliography.replace(/\n/g, '<br />') }} />
+                  </div>
                 </div>
               )}
             </div>
@@ -507,6 +776,35 @@ function ToolCanvasPage() {
   }
 
   // ===== LEAD FINDER SPEC =====
+  // Show membership gate if not subscribed
+  if (membershipLoading) {
+    return (
+      <div className="flex items-center justify-center py-32">
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+      </div>
+    );
+  }
+  if (membership && !membership.isSubscribed) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <div className="mb-6 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 p-4">
+          <Lock className="h-10 w-10 text-indigo-600" />
+        </div>
+        <h2 className="text-2xl font-bold text-gray-900">Membership Required</h2>
+        <p className="mt-2 max-w-md text-sm text-gray-500">
+          Subscribe to Leverage for <strong>$29/month</strong> to unlock this tool and all 20+ tools in our catalog. No technical skills needed — just one click and you're running.
+        </p>
+        <div className="mt-8 flex gap-4">
+          <Link to="/" className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            Browse Tools
+          </Link>
+          <button className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:from-indigo-700 hover:to-purple-700">
+            <Zap className="h-4 w-4" /> Subscribe Now — $29/mo
+          </button>
+        </div>
+      </div>
+    );
+  }
   if (isLeadFinder) {
     let leads: Record<string, unknown>[] = [];
     if (results?.leads) { try { leads = JSON.parse(results.leads); } catch { } }

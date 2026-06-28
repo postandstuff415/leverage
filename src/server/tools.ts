@@ -1,3 +1,5 @@
+import { performMarketSentimentAnalysis } from "./sentiment";
+import { performDeepResearch } from "./researcher";
 /**
  * Server-side tool execution engine.
  *
@@ -6,11 +8,16 @@
  * matching its output schema. When real API keys and logic are available
  * (from the research phase), swap the mock return values for actual
  * API calls — the UI contract stays the same.
+ *
+ * Protected by authMiddleware — only subscribed users can execute tools.
+ * Usage is logged to the `usage_logs` table on every execution.
  */
 
 import { createServerFn } from "@tanstack/react-start";
 import { getToolById } from "~/config/tools";
 import { performBusinessAudit } from "./audit";
+import { authMiddleware } from "./middleware";
+import { logUsage } from "./usage";
 
 // ── Type definitions ──────────────────────────────────────────────
 
@@ -418,6 +425,7 @@ function mockAiDeepResearcher(params: Record<string, string>) {
 // ── The server function ───────────────────────────────────────────
 
 export const executeTool = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
   .validator((data: unknown) => data as ExecuteToolInput)
   .handler(async (ctx) => {
     const { toolId, params } = ctx.data;
@@ -491,9 +499,19 @@ export const executeTool = createServerFn({ method: "POST" })
         case "instant-invoicer":
           data = mockInstantInvoicer(params);
           break;
-        case "market-sentiment-watcher":
-          data = mockMarketSentiment(params);
+        case "market-sentiment-watcher": {
+          const topic = params.topic || params.tickers || params.article_text || "Finance";
+          const result = await performMarketSentimentAnalysis(topic);
+          if (!result.success && !result.warning) {
+            return {
+              success: false,
+              data: {},
+              error: result.error,
+            } satisfies ExecuteToolResult;
+          }
+          data = result.data as any;
           break;
+        }
         // Batch 3 tools
         case "personal-business-wiki":
           data = mockPersonalBusinessWiki(params);
@@ -522,9 +540,21 @@ export const executeTool = createServerFn({ method: "POST" })
         case "sales-outreach-accelerator":
           data = mockSalesOutreachAccelerator(params);
           break;
-        case "ai-deep-researcher":
-          data = mockAiDeepResearcher(params);
+        case "ai-deep-researcher": {
+          const topic = params.topic || "";
+          const depthLevel = params.depth_level || "Standard";
+          const outputFormat = params.output_format || "Executive Summary";
+          const result = await performDeepResearch(topic, depthLevel, outputFormat);
+          if (!result.success && !result.warning) {
+            return {
+              success: false,
+              data: {},
+              error: result.error,
+            } satisfies ExecuteToolResult;
+          }
+          data = result.data;
           break;
+        }
         default:
           // Fallback: generate values from the output schema
           data = {};
@@ -533,11 +563,15 @@ export const executeTool = createServerFn({ method: "POST" })
           }
       }
 
+      // Fire-and-forget: log successful execution to usage_logs
+      logUsage(ctx.context.userId ?? "unknown", toolId, "success");
       return {
         success: true,
         data,
       } satisfies ExecuteToolResult;
     } catch (err) {
+      // Fire-and-forget: log execution result to usage_logs
+      logUsage(ctx.context.userId ?? "unknown", toolId, "failed");
       return {
         success: false,
         data: {},
