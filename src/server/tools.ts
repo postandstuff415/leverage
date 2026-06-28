@@ -10,6 +10,7 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { getToolById } from "~/config/tools";
+import { performBusinessAudit } from "./audit";
 
 // ── Type definitions ──────────────────────────────────────────────
 
@@ -471,9 +472,19 @@ export const executeTool = createServerFn({ method: "POST" })
         case "ask-your-data":
           data = mockAskYourData(params);
           break;
-        case "smart-business-audit":
-          data = mockBusinessAudit(params);
+        case "smart-business-audit": {
+          const businessInfo = params.business_info || "";
+          const result = await performBusinessAudit(businessInfo);
+          if (!result.success && !result.warning) {
+            return {
+              success: false,
+              data: {},
+              error: result.error,
+            } satisfies ExecuteToolResult;
+          }
+          data = result.data;
           break;
+        }
         case "content-repurposer":
           data = mockContentRepurposer(params);
           break;

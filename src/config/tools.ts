@@ -253,22 +253,23 @@ export const tools: ToolConfig[] = [
     metadata: {
       id: "smart-business-audit",
       name: "Smart Business Audit",
-      description: "Instant 1-click comprehensive data health report for your business records.",
-      repository: "https://github.com/ydataai/ydata-profiling",
+      description: "Get a comprehensive SWOT analysis, target audience breakdown, and growth experiments for any business URL or description.",
+      repository: "https://github.com/perplexica/perplexica",
       category: "Operations",
     },
     inputParameters: [
       {
-        key: "file",
-        type: "string",
-        label: "Data File URL",
-        description: "URL or path to your CSV/Excel file for auditing",
+        key: "business_info",
+        type: "textarea",
+        label: "Business Info",
+        description: "Paste a website URL or describe the business (e.g., 'A vegan bakery in Austin specializing in gluten-free cupcakes')",
         required: true,
       },
     ],
     outputSchema: [
-      { key: "report_html", type: "string", label: "Audit Report URL" },
-      { key: "health_score", type: "number", label: "Data Health Score" },
+      { key: "swot_analysis", type: "textarea", label: "SWOT Analysis" },
+      { key: "target_audience", type: "textarea", label: "Target Audience Identification" },
+      { key: "growth_experiments", type: "list", label: "Growth Experiments" },
     ],
   },
   {
