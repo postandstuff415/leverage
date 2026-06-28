@@ -23,6 +23,11 @@ import {
   Repeat,
   FileText,
   TrendingUp,
+  Image,
+  Scan,
+  Target,
+  Send,
+  ClipboardList,
 } from "lucide-react";
 
 import { tools } from "~/config/tools";
@@ -57,6 +62,16 @@ const toolIcons: Record<string, typeof MapPin> = {
   "content-repurposer": Repeat,
   "instant-invoicer": FileText,
   "market-sentiment-watcher": TrendingUp,
+  "personal-business-wiki": ClipboardList,
+  "ai-marketing-assistant": BarChart3,
+  "automated-document-generator": FileCheck,
+  "instant-background-remover": Image,
+  "ai-paperless-office": Scan,
+  "deal-closer-assistant": Target,
+  "gtm-signal-scorer": TrendingUp,
+  "customer-sentiment-dashboard": Star,
+  "sales-outreach-accelerator": Send,
+  "ai-deep-researcher": Search,
 };
 
 const toolGradients: Record<string, string> = {
@@ -70,6 +85,16 @@ const toolGradients: Record<string, string> = {
   "content-repurposer": "from-purple-500 to-pink-600",
   "instant-invoicer": "from-teal-500 to-cyan-600",
   "market-sentiment-watcher": "from-yellow-500 to-amber-600",
+  "personal-business-wiki": "from-slate-500 to-gray-600",
+  "ai-marketing-assistant": "from-orange-500 to-red-600",
+  "automated-document-generator": "from-indigo-400 to-blue-500",
+  "instant-background-remover": "from-pink-400 to-rose-500",
+  "ai-paperless-office": "from-cyan-500 to-teal-600",
+  "deal-closer-assistant": "from-red-500 to-rose-600",
+  "gtm-signal-scorer": "from-sky-500 to-cyan-600",
+  "customer-sentiment-dashboard": "from-rose-400 to-pink-500",
+  "sales-outreach-accelerator": "from-emerald-400 to-green-600",
+  "ai-deep-researcher": "from-violet-400 to-indigo-500",
 };
 
 const toolBadges: Record<string, { label: string; style: string }> = {
@@ -92,6 +117,46 @@ const toolBadges: Record<string, { label: string; style: string }> = {
   "instant-invoicer": {
     label: "Popular",
     style: "bg-teal-100 text-teal-700",
+  },
+  "personal-business-wiki": {
+    label: "New",
+    style: "bg-slate-100 text-slate-700",
+  },
+  "ai-marketing-assistant": {
+    label: "New",
+    style: "bg-orange-100 text-orange-700",
+  },
+  "automated-document-generator": {
+    label: "New",
+    style: "bg-indigo-100 text-indigo-700",
+  },
+  "instant-background-remover": {
+    label: "New",
+    style: "bg-pink-100 text-pink-700",
+  },
+  "ai-paperless-office": {
+    label: "New",
+    style: "bg-cyan-100 text-cyan-700",
+  },
+  "deal-closer-assistant": {
+    label: "New",
+    style: "bg-red-100 text-red-700",
+  },
+  "gtm-signal-scorer": {
+    label: "New",
+    style: "bg-sky-100 text-sky-700",
+  },
+  "customer-sentiment-dashboard": {
+    label: "New",
+    style: "bg-rose-100 text-rose-700",
+  },
+  "sales-outreach-accelerator": {
+    label: "New",
+    style: "bg-emerald-100 text-emerald-700",
+  },
+  "ai-deep-researcher": {
+    label: "New",
+    style: "bg-violet-100 text-violet-700",
   },
 };
 
@@ -177,6 +242,10 @@ function Home() {
             "Customer Engagement",
             "Marketing",
             "Content Marketing",
+            "Sales",
+            "Operations",
+            "Data & Analytics",
+            "Finance & Tax",
           ].map((cat) => (
             <span
               key={cat}

@@ -287,6 +287,133 @@ function mockMarketSentiment(params: Record<string, string>) {
   };
 }
 
+// ── Batch 3 mock data generators ─────────────────────────────────
+
+function mockPersonalBusinessWiki(params: Record<string, string>) {
+  const query = params.query || "general info";
+  return {
+    answer: `Based on your knowledge base, here's what I found about "${query}":\n\nKey points:\n• Your business generated approximately $450K in revenue last quarter\n• Top-performing product line saw 34% growth YoY\n• Customer retention rate is currently at 78%\n• Three new competitors entered your market segment\n\nSource documents matched: 5`,
+    source_links: "https://wiki.leverage.ai/sources/doc1.md, https://wiki.leverage.ai/sources/doc2.md",
+  };
+}
+
+function mockAiMarketingAssistant(params: Record<string, string>) {
+  const score = randomInt(45, 92);
+  const goals = params.marketing_goals || "brand awareness";
+  return {
+    score,
+    audit_report: `https://marketing.leverage.ai/audit/${Date.now()}.pdf`,
+    recommendations: [
+      `Improve SEO targeting for "${goals}" — current keyword coverage is only ${randomInt(30, 60)}%`,
+      `Increase social media posting frequency from 3x to 5x per week for better engagement`,
+      `Create 3+ lead magnets tailored to your target audience identified in the audit`,
+      `Optimize landing page conversion — current rate is ${randomInt(1, 5)}%, industry avg is 8%`,
+      `Run A/B tests on email subject lines to improve open rates`,
+    ],
+  };
+}
+
+function mockAutomatedDocumentGenerator(params: Record<string, string>) {
+  const docType = params.document_type || "report";
+  const companyName = params.company_name || "Your Company";
+  return {
+    formatted_document: `# ${docType.charAt(0).toUpperCase() + docType.slice(1)} — ${companyName}\n\n## Executive Summary\n\nThis document was auto-generated using Leverage's document pipeline.\n\n## Key Metrics\n- Revenue: $1.2M\n- Growth: 24% YoY\n- Team Size: 45\n\n## Next Steps\nPlease review and approve by end of quarter.`,
+    download_url: `https://docs.leverage.ai/download/${Date.now()}.docx`,
+  };
+}
+
+function mockInstantBackgroundRemover(params: Record<string, string>) {
+  const format = params.output_format || "png";
+  return {
+    processed_image: `https://images.leverage.ai/processed/${Date.now()}.${format}`,
+    original_filename: params.image_url?.split("/").pop() || "uploaded_image.jpg",
+  };
+}
+
+function mockAiPaperlessOffice(params: Record<string, string>) {
+  const summaryEnabled = params.enable_summarization === "true" || params.enable_summarization === "yes";
+  return {
+    extracted_data: JSON.stringify({
+      invoice_number: `INV-${randomInt(1000, 9999)}`,
+      date: new Date().toISOString().split("T")[0],
+      vendor: randomChoice(["Global Supplies Inc", "TechCorp Solutions", "DataStream Services"]),
+      total: `$${randomInt(500, 15000).toLocaleString("en-US")}.00`,
+      line_items: randomInt(3, 8),
+    }, null, 2),
+    summary: summaryEnabled
+      ? "Document scanned successfully. Key extracted fields: invoice number, date, vendor name, total amount, and 5 line items. Category identified as 'Accounts Payable'."
+      : "Summary not requested.",
+    category_tag: randomChoice(["Accounts Payable", "Receipts", "Contracts", "HR Documents"]),
+  };
+}
+
+function mockDealCloserAssistant(params: Record<string, string>) {
+  const stage = params.current_stage || "negotiation";
+  return {
+    risk_level: randomChoice(["Low", "Medium", "High"]),
+    suggested_next_steps: [
+      `Follow up within 24 hours — deal has been in "${stage}" stage for ${randomInt(3, 14)} days`,
+      "Schedule a demo with the decision-maker to address technical concerns",
+      "Prepare a customized pricing proposal with 15% first-year discount",
+      "Send case studies from 3 similar clients in their industry",
+    ],
+    winning_strategy: `Focus on ROI metrics. Key decision factors for this deal appear to be: \n1. Time-to-value (target: under 30 days)\n2. Integration with existing stack\n3. Total cost of ownership compared to current solution`,
+  };
+}
+
+function mockGtmSignalScorer(params: Record<string, string>) {
+  const score = randomInt(20, 98);
+  const level = score >= 70 ? "High Priority" : score >= 40 ? "Medium Priority" : "Low Priority";
+  return {
+    lead_score: score,
+    priority_level: level,
+    key_signals_detected: [
+      `Visited pricing page ${randomInt(2, 8)} times in the last 7 days`,
+      `Downloaded whitepaper: "Industry Trends ${new Date().getFullYear()}"`,
+      `Attended recent webinar on product capabilities`,
+      `LinkedIn profile shows decision-maker title (${randomChoice(["VP", "Director", "Head of"])} of ${randomChoice(["Engineering", "Product", "Growth"])})`,
+    ],
+  };
+}
+
+function mockCustomerSentimentDashboard(params: Record<string, string>) {
+  const timePeriod = params.time_period || "Last 30 Days";
+  const sentiment = randomChoice(["Positive", "Neutral", "Mixed"]);
+  return {
+    overall_sentiment: `${sentiment} (${timePeriod})`,
+    top_complaints: [
+      "Response time could be faster — average wait is 4+ hours",
+      "Mobile app UI needs improvement — reported by 23% of users",
+      "Pricing transparency — some users found hidden fees confusing",
+    ],
+    top_praises: [
+      "Product quality exceeds expectations — mentioned in 78% of reviews",
+      "Customer support team is knowledgeable and friendly",
+      "Feature set is comprehensive compared to competitors",
+    ],
+  };
+}
+
+function mockSalesOutreachAccelerator(params: Record<string, string>) {
+  const tone = params.outreach_tone || "Professional";
+  return {
+    personalized_message: `Hi {{name}},\n\nI noticed you've been exploring ways to improve your team's efficiency. At ${randomChoice(["Acme Corp", "InnovateLabs", "NextGen Solutions"])}, we help companies like yours achieve 40% faster workflows using our platform.\n\nWould you be open to a 15-minute call this week to see if it's a fit?\n\nBest,\n${randomChoice(["Sarah", "James", "Alex", "Maria"])}`,
+    subject_line: `Quick idea for ${randomChoice(["improving", "optimizing", "streamlining"])} your workflow`,
+    follow_up_schedule: "Day 1: Initial email\nDay 3: LinkedIn connection request + note\nDay 7: Follow-up email with case study\nDay 14: Final check-in phone call",
+  };
+}
+
+function mockAiDeepResearcher(params: Record<string, string>) {
+  const topic = params.topic || "requested topic";
+  const format = params.output_format || "Executive Summary";
+  const depth = params.depth_level || "Standard";
+  return {
+    executive_summary: `## Research Summary: ${topic}\n\nAfter analyzing ${depth === "Exhaustive" ? "47" : "12"} sources, here are the key findings:\n\n**Market Overview**\nThe ${topic} market is projected to grow at ${randomInt(8, 25)}% CAGR over the next 3 years, driven by increasing demand for automation and AI-powered solutions.\n\n**Key Players**\n• Major incumbents: ${randomChoice(["Company A", "Company B", "Company C"])}\n• Emerging disruptors: ${randomChoice(["Startup X", "Startup Y", "Startup Z"])}\n\n**Critical Insight**\n${randomChoice(["First-mover advantage is critical in this space", "Regulatory changes are expected to reshape the landscape", "Customer adoption is accelerating faster than anticipated"])}.`,
+    detailed_findings: `[${format} mode] Detailed analysis of "${topic}":\n\n1. Market Size & Growth\n   - Current TAM: ${randomInt(5, 50)}B\n   - Growth drivers: digital transformation, remote work, AI adoption\n   \n2. Competitive Landscape\n   - ${randomInt(15, 50)}+ companies actively competing\n   - Top 3 hold ${randomInt(40, 70)}% market share\n   \n3. Technology Trends\n   - Key innovations: ML-based automation, real-time analytics, API-first architecture\n   - Patent filings up ${randomInt(15, 40)}% year-over-year\n   \n4. Risks & Challenges\n   - Regulatory uncertainty in key markets\n   - Talent shortage for specialized roles\n   - Integration complexity with legacy systems`,
+    bibliography: `1. "Industry Report ${new Date().getFullYear()}" — Market Research Firm\n2. "Technology Trends Analysis" — Tech Advisory Board\n3. "Competitive Landscape Assessment" — Industry Analyst\n4. "Consumer Survey Results" — Market Insights Group\n5. "Patent Analysis: ${topic}" — IP Research Institute`,
+  };
+}
+
 // ── The server function ───────────────────────────────────────────
 
 export const executeTool = createServerFn({ method: "POST" })
@@ -355,6 +482,37 @@ export const executeTool = createServerFn({ method: "POST" })
           break;
         case "market-sentiment-watcher":
           data = mockMarketSentiment(params);
+          break;
+        // Batch 3 tools
+        case "personal-business-wiki":
+          data = mockPersonalBusinessWiki(params);
+          break;
+        case "ai-marketing-assistant":
+          data = mockAiMarketingAssistant(params);
+          break;
+        case "automated-document-generator":
+          data = mockAutomatedDocumentGenerator(params);
+          break;
+        case "instant-background-remover":
+          data = mockInstantBackgroundRemover(params);
+          break;
+        case "ai-paperless-office":
+          data = mockAiPaperlessOffice(params);
+          break;
+        case "deal-closer-assistant":
+          data = mockDealCloserAssistant(params);
+          break;
+        case "gtm-signal-scorer":
+          data = mockGtmSignalScorer(params);
+          break;
+        case "customer-sentiment-dashboard":
+          data = mockCustomerSentimentDashboard(params);
+          break;
+        case "sales-outreach-accelerator":
+          data = mockSalesOutreachAccelerator(params);
+          break;
+        case "ai-deep-researcher":
+          data = mockAiDeepResearcher(params);
           break;
         default:
           // Fallback: generate values from the output schema
